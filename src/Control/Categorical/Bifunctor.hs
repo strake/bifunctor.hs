@@ -1,7 +1,26 @@
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Control.Categorical.Bifunctor where
+module Control.Categorical.Bifunctor (
+    lmap,
+    rmap,
+    bimap,
+    (***),
+
+    Associative (..),
+
+    Braided (..),
+
+    Monoidal (..),
+
+    MonoidalObject (..),
+
+    Cartesian (..),
+    (|||),
+
+    MonoidalFunctor (..),
+) where
 
 import Control.Categorical.Functor
 import Control.Category.Dual
@@ -12,8 +31,13 @@ import Data.Void
 lmap :: Functor r (NT t) f => r a b -> t (f a c) (f b c)
 lmap = nt . map
 
-bimap :: (Functor r (NT t) f, ∀ a . Functor s t (f a)) => r a₁ b₁ -> s a₂ b₂ -> t (f a₁ a₂) (f b₁ b₂)
+rmap :: Functor s t (f a) => s b c -> t (f a b) (f a c)
+rmap = map
+
+infixr 3 ***
+bimap, (***) :: (Functor r (NT t) f, ∀ a . Functor s t (f a)) => r a₁ b₁ -> s a₂ b₂ -> t (f a₁ a₂) (f b₁ b₂)
 bimap f g = lmap f . map g
+(***) = bimap
 
 class (Functor s (NT s) p, ∀ a . Endofunctor s (p a)) => Associative s p where
     assoc :: s (p (p a b) c) (p a (p b c))
@@ -88,10 +112,30 @@ class Monoidal s p => MonoidalObject s p a where
 
 infixr 3 &&&
 class (Symmetric s (Product s), Monoidal s (Product s)) => Cartesian s where
+    {-# MINIMAL fst, snd, (diag | (&&&)) #-}
     type Product s :: k -> k -> k
     fst :: s (Product s a b) a
     snd :: s (Product s a b) b
-    (&&&) :: s a b -> s a c -> s a (Product s b c)
+    diag :: s a (Product s a a)
+    (&&&) :: ∀ a b c . s a b -> s a c -> s a (Product s b c)
+
+    diag = id &&& id
+    f &&& g = case lemma3 :: _ (Endofunctor s (Product s a)) of Sub lemma3' -> lmap f . lemma3' (rmap g) . diag
+
+data Sub a b = Sub (∀ x . (b => x) -> (a => x))
+
+instance Category Sub where
+    id = Sub (\ x -> x)
+    Sub f . Sub g = Sub (\ x -> g (f x))
+
+lemma1 :: Sub (Monoidal s p) (Functor s s (p a))
+lemma1 = Sub (\ x -> x)
+
+lemma2 :: Sub (Cartesian s) (Monoidal s (Product s))
+lemma2 = Sub (\ x -> x)
+
+lemma3 :: Sub (Cartesian s) (Functor s s (Product s a))
+lemma3 = lemma1 . lemma2
 
 instance Cartesian (->) where
     type Product (->) = (,)
